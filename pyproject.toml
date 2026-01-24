@@ -1,0 +1,23 @@
+[project]
+name = "argbuilder"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "jgquiroga", email = "jgquiroga@dc.uba.ar" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+argbuilder = "argbuilder:main"
+
+[build-system]
+requires = ["uv_build>=0.9.13,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pydantic>=2.12.5",
+    "pytest>=9.0.2",
+]
