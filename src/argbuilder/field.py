@@ -5,7 +5,7 @@ class NotSet(object): ...
 NOT_SET = NotSet()
 
 type Maybe[T] = T|NotSet
-type TypeAnnotation[T] = Maybe[type[T]]
+type TypeAnnotation[T] = Maybe[T]
 type Default[T] = Maybe[T]
 
 DATACLASS_OPTIONS = dict(
@@ -27,13 +27,13 @@ class BuilderField[T: Any]:
     cls: None | type[T]
     serializer: Callable[[T], str]
     default: Default[T] = NOT_SET
-    annotation: TypeAnnotation[T] = NOT_SET
+    annotation: TypeAnnotation[type[T]] = NOT_SET
 
 def Field[T: Any](
     string: str, 
     serializer: Callable[[T], str] = lambda x: str(x),
     default: Default[T] = NOT_SET,
-    annotation: TypeAnnotation[T] = NOT_SET,
+    annotation: TypeAnnotation[type[T]] = NOT_SET,
 ):
 
     result = BuilderField[T](
