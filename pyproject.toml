@@ -7,7 +7,9 @@ authors = [
     { name = "jgquiroga", email = "jgquiroga@dc.uba.ar" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "pyright>=1.1.408",
+]
 
 [project.scripts]
 argbuilder = "argbuilder:main"
@@ -20,4 +22,5 @@ build-backend = "uv_build"
 dev = [
     "pydantic>=2.12.5",
     "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
 ]
