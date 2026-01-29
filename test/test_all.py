@@ -78,3 +78,20 @@ def test_default():
         x: int = Field('...', default=2)
 
     assert Command().x == 2
+
+def test_list_field():
+    class Command(Builder):
+        command: list[str] = Field('prefix otherprefix {value} othersuffix suffix', serializer=lambda x: x)
+
+    assert Command(command=['foo', 'kw=2']).build() == ['prefix otherprefix', 'foo', 'kw=2', 'othersuffix suffix']
+    
+    class Command(Builder):
+        kw: int = Field(['kw', '{value}'])
+
+    assert Command(kw=2).build() == ['kw', '2']
+
+    
+    class Command(Builder):
+        files: list[str] = Field(['files', '[', '{value}', ']'], lambda x: x)
+
+    assert Command(files=['a', 'b']).build() == ['files', '[', 'a', 'b', ']']

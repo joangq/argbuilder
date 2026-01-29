@@ -1,5 +1,7 @@
-from typing import Any, Callable, cast
+from typing import Any, Callable, Iterable, cast
 from dataclasses import dataclass
+
+VALUE_TOKEN = "{value}"
 
 class NotSet(object): ...
 NOT_SET = NotSet()
@@ -23,15 +25,15 @@ DATACLASS_OPTIONS = dict(
 
 @dataclass(**DATACLASS_OPTIONS)
 class BuilderField[T: Any]:
-    string: str
+    string: Iterable[str] | str
     cls: None | type[T]
-    serializer: Callable[[T], str]
+    serializer: Callable[[T], Iterable[str] | str]
     default: Default[T] = NOT_SET
     annotation: TypeAnnotation[type[T]] = NOT_SET
 
 def Field[T: Any](
-    string: str, 
-    serializer: Callable[[T], str] = lambda x: str(x),
+    string: Iterable[str] | str, 
+    serializer: Callable[[T], Iterable[str] | str] = lambda x: str(x),
     default: Default[T] = NOT_SET,
     annotation: TypeAnnotation[type[T]] = NOT_SET,
 ):

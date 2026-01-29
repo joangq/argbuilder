@@ -1,6 +1,45 @@
-from .field import BuilderField, AnyField, NOT_SET
+from .field import BuilderField, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
-from typing import cast
+from typing import Iterable, cast
+
+def find_all(
+        x: str, 
+        sub: str, 
+        start: int = 0, 
+        indices: list[int] | None = None
+) -> list[int]:
+    if indices is None:
+        indices = []
+
+    index = x.find(sub, start)
+
+    if index == -1:
+        return indices
+
+    indices.append(index)
+    return find_all(x, sub, index + len(sub), indices)
+
+def split_by(x: str, sub: str) -> list[str]:
+    indices = find_all(x, sub)
+    n = len(sub)
+
+    parts = list[str]()
+    last = 0
+
+    for left in indices:
+        right = left + n
+
+        if last < left:
+            parts.append(x[last:left])
+
+        parts.append(x[left:right])
+        last = right
+
+    if last < len(x):
+        parts.append(x[last:])
+
+    return parts
+
 
 class Builder:
     __builder_fields__: dict[str, AnyField]
@@ -69,10 +108,32 @@ class Builder:
         result = list[str]()
         for k,v in self.fields().items():
             field = self.class_fields()[k]
-            value=field.serializer(v)
-            result.append(field.string.format(value=value))
+            value = field.serializer(v)
+
+            if isinstance(value, str):
+                if isinstance(field.string, str):
+                    result.append(field.string.format(value=value))
+                else:
+                    for x in field.string:
+                        result.append(x.format(value=value))
+            else: # isinstance(value, Iterable[str])
+                if isinstance(field.string, str):
+                    for part in split_by(field.string, VALUE_TOKEN):
+                        if part == VALUE_TOKEN:
+                            for x in value:
+                                result.append(x)
+                        else:
+                            result.append(part.strip())
+                else:
+                    for part in field.string:
+                        if part == VALUE_TOKEN:
+                            for x in value:
+                                result.append(x)
+                        else:
+                            result.append(part.strip())
         
-        return [*result, *args]
+        ret = [*result, *args]
+        return ret
     
     def __eq__(self, other: object):
         if not isinstance(other, Builder):
