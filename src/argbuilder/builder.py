@@ -1,6 +1,9 @@
-from .field import BuilderField, AnyField, NOT_SET, VALUE_TOKEN
+from .field import Field, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
-from typing import Iterable, cast
+from typing import Any, cast
+from operator import add
+from functools import reduce as foldl
+from warnings import deprecated
 
 def find_all(
         x: str, 
@@ -41,14 +44,44 @@ def split_by(x: str, sub: str) -> list[str]:
     return parts
 
 
-class Builder:
+def get_command_name(x: object|type) -> str:
+    if not isinstance(x, type):
+        return get_command_name(type(x))
+    else:
+        name = x.__name__
+        if '_' not in name:
+            result = name
+        else:
+            result = name.rsplit('_', 1)[1]
+        
+        return result.lower()
+
+class Chainable:
+    def __init__(self, **kwargs: object):
+        self._parent = None
+        self._data = kwargs
+    
+    def __getattribute__(self, name: str) -> 'Bound|Any':
+        try:
+            attr = super().__getattribute__(name)
+        except AttributeError:
+            raise
+        
+        if (isinstance(attr, type) and 
+            issubclass(attr, Chainable)):
+            return Bound(attr, self)
+        
+        return cast(Any, attr)
+
+
+class Builder(Chainable):
     __builder_fields__: dict[str, AnyField]
     def __init_subclass__(cls):
         annotations = cls.__annotations__
         
         builder_fields = dict[str, AnyField]()
         for k,v in cls.__dict__.items():
-            if not isinstance(v, BuilderField):
+            if not isinstance(v, Field):
                 continue
             
             v = cast(AnyField, v)
@@ -77,6 +110,7 @@ class Builder:
         return cls.__builder_fields__
 
     def __init__(self, **kwargs: object):
+        super().__init__()
         defaults = {
             k:v.default
             for k,v in self.class_fields().items()
@@ -103,8 +137,8 @@ class Builder:
         }
         
         return cls(**params)
-        
-    def build(self, **args: str):
+    
+    def _build_fields(self, with_self: bool, extra: dict[str, str]):
         result = list[str]()
         for k,v in self.fields().items():
             field = self.class_fields()[k]
@@ -132,8 +166,37 @@ class Builder:
                         else:
                             result.append(part.strip())
         
-        ret = [*result, *args]
+        ret = list[str]()
+        if with_self:
+            ret.append(get_command_name(type(self)))
+        
+        ret.extend(result)
+        ret.extend(extra)
+        #ret = [*result, *args]
         return ret
+        
+    def build(self, with_self: bool = False, **args: str):
+        has_parent = (
+            hasattr(self, '_parent')
+            and self._parent is not None
+        )
+
+        if has_parent:
+            parts = list[Any]()
+            node = self
+            while node:
+                parts.append(node._build_fields(
+                    with_self=with_self,
+                    extra={},
+                ))
+                node = node._parent
+            
+            return foldl(add, reversed(parts))
+        
+        return self._build_fields(
+            with_self=with_self,
+            extra=args
+        )
     
     def __eq__(self, other: object):
         if not isinstance(other, Builder):
@@ -143,3 +206,15 @@ class Builder:
             self.fields() == other.fields()
             and self.class_fields() == other.class_fields()
         )
+
+class Bound:
+    def __init__(self, cls: type, parent: object):
+        self.cls = cls
+        self.parent = parent
+
+    def __call__(self, **kwargs: object):
+        child = self.cls(**kwargs)
+        child._parent = self.parent
+        return child
+    
+class Command(Builder): ...

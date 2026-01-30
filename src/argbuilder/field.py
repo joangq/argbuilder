@@ -24,21 +24,21 @@ DATACLASS_OPTIONS = dict(
 )
 
 @dataclass(**DATACLASS_OPTIONS)
-class BuilderField[T: Any]:
+class Field[T: Any]:
     string: Iterable[str] | str
     cls: None | type[T]
     serializer: Callable[[T], Iterable[str] | str]
     default: Default[T] = NOT_SET
     annotation: TypeAnnotation[type[T]] = NOT_SET
 
-def Field[T: Any](
+def FieldSetter[T: Any](
     string: Iterable[str] | str, 
     serializer: Callable[[T], Iterable[str] | str] = lambda x: str(x),
     default: Default[T] = NOT_SET,
     annotation: TypeAnnotation[type[T]] = NOT_SET,
 ):
 
-    result = BuilderField[T](
+    result = Field[T](
         string=string,
         annotation=annotation,
         cls=None,
@@ -48,4 +48,4 @@ def Field[T: Any](
 
     return cast(T, result)
 
-type AnyField = BuilderField[object]
+type AnyField = Field[object]

@@ -1,45 +1,58 @@
-string = 'prefix otherprefix {value} othersuffix suffix'
+"""
+class Chainable:
+    def __init__(self, **kwargs):
+        self._parent = None
+        self._data = kwargs
 
-def find_all(
-        x: str, 
-        sub: str, 
-        start: int = 0, 
-        indices: list[int] | None = None
-) -> list[int]:
-    if indices is None:
-        indices = []
+    def __getattribute__(self, name):
+        try:
+            attr = super().__getattribute__(name)
+        except AttributeError:
+            raise
 
-    index = x.find(sub, start)
+        if isinstance(attr, type) and issubclass(attr, Chainable):
+            return BoundChild(attr, self)
+        return attr
 
-    if index == -1:
-        return indices
+    def unwrap(self):
+        parts = []
+        node = self
+        while node:
+            cls = type(node).__name__
+            for k, v in node._data.items():
+                parts.append(f"{cls}.{k}={v}")
+            node = node._parent
+        return ", ".join(reversed(parts))
 
-    indices.append(index)
-    return find_all(x, sub, index + len(sub), indices)
 
-def split_by(x: str, sub: str) -> list[str]:
-    indices = find_all(x, sub)
-    n = len(sub)
+class BoundChild:
+    def __init__(self, cls, parent):
+        self.cls = cls
+        self.parent = parent
 
-    parts = list[str]()
-    last = 0
+    def __call__(self, **kwargs):
+        child = self.cls(**kwargs)
+        child._parent = self.parent
+        return child
 
-    for left in indices:
-        right = left + n
+class Outer(Chainable):
+    ...
+    
+class A(Outer):
+    class B(Outer):
+        class C(Outer):
+            ...
 
-        if last < left:
-            parts.append(x[last:left])
+print(A(x=1).B(y=2).C(z=3).unwrap())
+"""
 
-        parts.append(x[left:right])
-        last = right
+from argbuilder import Builder, FieldSetter
 
-    if last < len(x):
-        parts.append(x[last:])
+class A(Builder):
+    x: int = FieldSetter('--A-x={value}')
 
-    return parts
+    class B(Builder):
+        y: int = FieldSetter('--B-y={value}')
 
-        
 
-index = split_by(string, '{value}')
-
-print(index)
+print(A(x=1).B(y=2).build(with_self=True))

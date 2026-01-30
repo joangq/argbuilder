@@ -1,3 +1,3 @@
 # type: ignore
-from .builder import Builder
-from .field import Field
+from .builder import Builder, Command
+from .field import FieldSetter as Field
