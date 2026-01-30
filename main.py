@@ -1,58 +1,25 @@
-"""
-class Chainable:
-    def __init__(self, **kwargs):
-        self._parent = None
-        self._data = kwargs
+from argbuilder import Command, Field
+from functools import partial
 
-    def __getattribute__(self, name):
-        try:
-            attr = super().__getattribute__(name)
-        except AttributeError:
-            raise
+type LogLevel = str
+class Celery(Command):
+    app: str = Field(['-A', '{value}'])
+    worker_name: str = Field('{value}')
+    log_level: LogLevel = Field('--loglevel={value}')
 
-        if isinstance(attr, type) and issubclass(attr, Chainable):
-            return BoundChild(attr, self)
-        return attr
+class Uv(Command):
+    command: 'Uv.run' = Field('{value}', partial(Command.build, with_self=True))
+    upgrade: bool = Field('-U')
 
-    def unwrap(self):
-        parts = []
-        node = self
-        while node:
-            cls = type(node).__name__
-            for k, v in node._data.items():
-                parts.append(f"{cls}.{k}={v}")
-            node = node._parent
-        return ", ".join(reversed(parts))
+    class run(Command):
+        module: Command = Field('{value}', partial(Command.build, with_self=True))
 
+celery = Celery(
+    app = 'foobar.celery_app.celery_app',
+    worker_name = 'worker',
+    log_level = 'info'
+)
 
-class BoundChild:
-    def __init__(self, cls, parent):
-        self.cls = cls
-        self.parent = parent
+command = Uv(upgrade=False).run(module=celery)
 
-    def __call__(self, **kwargs):
-        child = self.cls(**kwargs)
-        child._parent = self.parent
-        return child
-
-class Outer(Chainable):
-    ...
-    
-class A(Outer):
-    class B(Outer):
-        class C(Outer):
-            ...
-
-print(A(x=1).B(y=2).C(z=3).unwrap())
-"""
-
-from argbuilder import Builder, FieldSetter
-
-class A(Builder):
-    x: int = FieldSetter('--A-x={value}')
-
-    class B(Builder):
-        y: int = FieldSetter('--B-y={value}')
-
-
-print(A(x=1).B(y=2).build(with_self=True))
+print(command.build(with_self=True))

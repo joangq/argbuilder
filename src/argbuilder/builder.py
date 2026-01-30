@@ -74,7 +74,7 @@ class Chainable:
         return cast(Any, attr)
 
 
-class Builder(Chainable):
+class Command(Chainable):
     __builder_fields__: dict[str, AnyField]
     def __init_subclass__(cls):
         annotations = cls.__annotations__
@@ -199,7 +199,7 @@ class Builder(Chainable):
         )
     
     def __eq__(self, other: object):
-        if not isinstance(other, Builder):
+        if not isinstance(other, type(self)):
             return False
         
         return (
@@ -217,4 +217,5 @@ class Bound:
         child._parent = self.parent
         return child
     
-class Command(Builder): ...
+@deprecated("Deprecated, use 'Command' instead.")
+class Builder(Command): ...
