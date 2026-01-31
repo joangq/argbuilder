@@ -208,12 +208,18 @@ class Command(Chainable):
         )
 
 class Bound:
-    def __init__(self, cls: type, parent: object):
+    def __init__(self, cls: type[Command], parent: object):
         self.cls = cls
         self.parent = parent
 
     def __call__(self, **kwargs: object):
         child = self.cls(**kwargs)
+        child._parent = self.parent
+        return child
+    
+    
+    def from_dict(self, data: dict[str, object]):
+        child = self.cls.from_dict(data)
         child._parent = self.parent
         return child
     

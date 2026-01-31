@@ -108,7 +108,12 @@ def test_subcommands():
         class Bus(Command):
             y: str = Field('--bus-y={value}')
 
+    expected = ['top', '--top-arg=a', 'sub', '--sub-x=b']    
     assert (
-        Top(arg='a').Sub(x='b').build(with_self=True)
-        == ['top', '--top-arg=a', 'sub', '--sub-x=b']
+        expected
+        == Top(arg='a').Sub(x='b').build(with_self=True)
+        == Top(arg='a').Sub.from_dict({'x': 'b'}).build(with_self=True)
+        == Top.from_dict({'arg': 'a'}).Sub(x='b').build(with_self=True)
+        == Top.from_dict({'arg': 'a'}).Sub.from_dict({'x': 'b'}).build(with_self=True)
+        
     )
