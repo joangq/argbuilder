@@ -175,7 +175,7 @@ class Command(Chainable):
         #ret = [*result, *args]
         return ret
         
-    def build(self, with_self: bool = False, **args: str):
+    def build(self, with_self: bool = True, **args: str):
         has_parent = (
             hasattr(self, '_parent')
             and self._parent is not None

@@ -50,8 +50,8 @@ def test_build():
     with pytest.raises(KeyError):
         Foo(**(args|{'otherarg': 2}))
 
-    build = command.build()
-    assert build == command_from_dict.build()
+    build = command.build(with_self=False)
+    assert build == command_from_dict.build(with_self=False)
 
     assert repr(command) == "Foo(verbose=True, keyword_argument=a, equals_argument=2)"
 
@@ -83,18 +83,18 @@ def test_list_field():
     class Foo(Command):
         command: list[str] = Field('prefix otherprefix {value} othersuffix suffix', serializer=lambda x: x)
 
-    assert Foo(command=['foo', 'kw=2']).build() == ['prefix otherprefix', 'foo', 'kw=2', 'othersuffix suffix']
+    assert Foo(command=['foo', 'kw=2']).build(with_self=False) == ['prefix otherprefix', 'foo', 'kw=2', 'othersuffix suffix']
     
     class Foo(Command):
         kw: int = Field(['kw', '{value}'])
 
-    assert Foo(kw=2).build() == ['kw', '2']
+    assert Foo(kw=2).build(with_self=False) == ['kw', '2']
 
     
     class Foo(Command):
         files: list[str] = Field(['files', '[', '{value}', ']'], lambda x: x)
 
-    assert Foo(files=['a', 'b']).build() == ['files', '[', 'a', 'b', ']']
+    assert Foo(files=['a', 'b']).build(with_self=False) == ['files', '[', 'a', 'b', ']']
 
 
 def test_subcommands():

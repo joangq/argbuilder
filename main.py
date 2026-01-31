@@ -8,11 +8,16 @@ class Celery(Command):
     log_level: LogLevel = Field('--loglevel={value}')
 
 class Uv(Command):
-    command: 'Uv.run' = Field('{value}', partial(Command.build, with_self=True))
+    type subcommands = object
+    
+    command: 'Uv.subcommands' = Field('{value}', partial(Command.build, with_self=True))
     upgrade: bool = Field('-U')
 
     class run(Command):
         module: Command = Field('{value}', partial(Command.build, with_self=True))
+    
+    class add(Command):
+        dependencies: list[str] = Field('{value}')
 
 celery = Celery(
     app = 'foobar.celery_app.celery_app',
