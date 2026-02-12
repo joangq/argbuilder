@@ -162,3 +162,18 @@ def test_run():
     result = NonExistent().run()
     assert result.returncode == 1
     assert result.stdout == b''
+
+def test_default_serializers():
+    import pathlib
+
+    class Foo(Command):
+        path: pathlib.Path = Field('--path={value}')
+        verbose: bool = Field('--verbose')
+
+    foopath = pathlib.Path('foo').resolve()
+    full_foopath = str(foopath.resolve())
+    command = Foo(path=foopath, verbose=True)
+    assert command.build(with_self=False) == [f'--path={full_foopath}', '--verbose']
+
+    command = Foo(path=foopath, verbose=False)
+    assert command.build(with_self=False) == [f'--path={full_foopath}']

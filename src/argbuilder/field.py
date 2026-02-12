@@ -1,4 +1,4 @@
-from typing import Any, Callable, Iterable, cast
+from typing import Any, Callable, Final, Iterable, cast
 from dataclasses import dataclass
 
 VALUE_TOKEN = "{value}"
@@ -31,9 +31,11 @@ class Field[T: Any]:
     default: Default[T] = NOT_SET
     annotation: TypeAnnotation[type[T]] = NOT_SET
 
+DEFAULT_SERIALIZER: Final[Callable[[Any], str]] = lambda x: str(x)
+
 def FieldSetter[T: Any](
     string: Iterable[str] | str, 
-    serializer: Callable[[T], Iterable[str] | str] = lambda x: str(x),
+    serializer: Callable[[T], Iterable[str] | str] = DEFAULT_SERIALIZER,
     default: Default[T] = NOT_SET,
     annotation: TypeAnnotation[type[T]] = NOT_SET,
 ):

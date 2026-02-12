@@ -1,5 +1,5 @@
 import subprocess
-from .field import Field, AnyField, NOT_SET, VALUE_TOKEN
+from .field import DEFAULT_SERIALIZER, Field, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
 from typing import Any, Literal, cast, overload
 from operator import add
@@ -74,6 +74,33 @@ class Chainable:
         
         return cast(Any, attr)
 
+# ==============================================================================
+
+
+def bool_serializer[T](f: Field[T]):
+    def _(value: T) -> list[str]:
+        if isinstance(f.string, str):
+            result = [f.string] if value else []
+        else:
+            result = f.string if value else []
+        return result
+    return _
+
+import pathlib
+def path_serializer[T](f: Field[T]):
+    def _(value: T) -> list[str]:
+        if not isinstance(value, pathlib.Path):
+            raise TypeError(f'Path field {f.string} must be of type {pathlib.Path}, but got {type(value).__name__}')
+        return str(pathlib.Path(value).resolve())
+    return _
+
+
+SERIALIZERS = {
+    bool: bool_serializer,
+    pathlib.Path: path_serializer,
+}
+
+# ==============================================================================
 
 class Command(Chainable):
     __builder_fields__: dict[str, AnyField]
@@ -90,8 +117,15 @@ class Command(Chainable):
             if v.annotation is not NOT_SET:
                 annotations[k] = v.annotation
 
+
             if k not in annotations:
                 raise InvalidFieldError(f'Field {k} is Field but has no type annotation.')
+            
+            t = annotations[k]
+            if (v.serializer is DEFAULT_SERIALIZER):
+                predefined_serializer = SERIALIZERS.get(t, None)
+                if predefined_serializer is not None:
+                    v.serializer = predefined_serializer(v)
             
             v.cls = cls
             v.annotation = annotations[k]
@@ -149,27 +183,19 @@ class Command(Chainable):
             field = self.class_fields()[k]
             value = field.serializer(v)
 
+            if not value:
+                continue
+
             if isinstance(value, str):
-                if isinstance(field.string, str):
-                    result.append(field.string.format(value=value))
-                else:
-                    for x in field.string:
-                        result.append(x.format(value=value))
-            else: # isinstance(value, Iterable[str])
-                if isinstance(field.string, str):
-                    for part in split_by(field.string, VALUE_TOKEN):
-                        if part == VALUE_TOKEN:
-                            for x in value:
-                                result.append(x)
-                        else:
-                            result.append(part.strip())
-                else:
-                    for part in field.string:
-                        if part == VALUE_TOKEN:
-                            for x in value:
-                                result.append(x)
-                        else:
-                            result.append(part.strip())
+                strings = [field.string] if isinstance(field.string, str) else field.string
+                result.extend((s.format(value=value) for s in strings))
+            else:
+                parts = split_by(field.string, VALUE_TOKEN) if isinstance(field.string, str) else field.string
+                for part in parts:
+                    if part == VALUE_TOKEN:
+                        result.extend(value)
+                    else:
+                        result.append(part.strip())
         
         ret = list[str]()
         if with_self:

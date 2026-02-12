@@ -1,30 +1,25 @@
 from argbuilder import Command, Field
-from functools import partial
 
-type LogLevel = str
-class Celery(Command):
-    app: str = Field(['-A', '{value}'])
-    worker_name: str = Field('{value}')
-    log_level: LogLevel = Field('--loglevel={value}')
+class MyCommand(Command):
+    threads: int = Field(['--threads', '{value}'], serializer=lambda x: str(x))
+    verbose: bool = Field('{value}', serializer=lambda x: ['--verbose'] if x else [])
 
-class Uv(Command):
-    type subcommands = object
-    
-    command: 'Uv.subcommands' = Field('{value}', partial(Command.build, with_self=True))
-    upgrade: bool = Field('-U')
+print(MyCommand(verbose=True, threads=2).build()) # -> ['mycommand', '--verbose', '--threads', '2']
+print(MyCommand(verbose=False, threads=1).build()) # -> ['mycommand', '--threads', '1']
 
-    class run(Command):
-        module: Command = Field('{value}', partial(Command.build, with_self=True))
-    
-    class add(Command):
-        dependencies: list[str] = Field('{value}')
+class OtherCommand(Command):
+    def arg0(self) -> str:
+        import platform
+        
+        match platform.system():
+            case 'Windows': return 'foo.cmd'
+            case 'Linux': return 'foo.sh'
+            case _: return 'foo'
 
-celery = Celery(
-    app = 'foobar.celery_app.celery_app',
-    worker_name = 'worker',
-    log_level = 'info'
-)
+    verbose: bool = Field(
+        '--verbose={value}',
+        serializer=lambda x: str(x).lower()
+    )
 
-command = Uv(upgrade=False).run(module=celery)
-
-print(command.build(with_self=True))
+print(OtherCommand().build()) # -> ['foo.cmd']
+print(OtherCommand(verbose=False).build()) # -> ['foo.cmd', '--verbose=false']
