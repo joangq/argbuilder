@@ -16,10 +16,7 @@ class OtherCommand(Command):
             case 'Linux': return 'foo.sh'
             case _: return 'foo'
 
-    verbose: bool = Field(
-        '--verbose={value}',
-        serializer=lambda x: str(x).lower()
-    )
+    verbose: bool = Field('--verbose')
 
-print(OtherCommand().build()) # -> ['foo.cmd']
-print(OtherCommand(verbose=False).build()) # -> ['foo.cmd', '--verbose=false']
+print(OtherCommand(verbose=True).build()) # -> ['foo.cmd', '--verbose]
+print(OtherCommand(verbose=False).build()) # -> ['foo.cmd']
