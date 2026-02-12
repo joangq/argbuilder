@@ -1,3 +1,4 @@
+import subprocess
 from .field import Field, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
 from typing import Any, cast
@@ -209,6 +210,18 @@ class Command(Chainable):
             with_self=with_self,
             extra=args
         )
+
+    def run(self, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        """Runs the built command via subprocess.run. Kwargs are passed through."""
+        DEFAULT_KWARGS = dict(
+            text=False,
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        kwargs = DEFAULT_KWARGS | kwargs
+        return subprocess.run(self.build(), **kwargs)
     
     def __eq__(self, other: object):
         if not isinstance(other, type(self)):

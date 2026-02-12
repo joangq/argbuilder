@@ -140,4 +140,18 @@ def test_arg0():
     with pytest.raises(TypeError):
         Foo().build(with_self=True)
         
+def test_run():
+    class Echo(Command):
+        arg0 = 'echo'
+        message: str = Field('{value}')
+
+    command = Echo(message='hello')
+    assert command.build(with_self=True) == ['echo', 'hello']
     
+    import subprocess
+    result = command.run()
+
+    assert isinstance(result, subprocess.CompletedProcess)
+    assert result.stdout == b'hello\n'
+    assert result.stderr == b''
+    assert result.returncode == 0
