@@ -155,3 +155,10 @@ def test_run():
     assert result.stdout == b'hello\n'
     assert result.stderr == b''
     assert result.returncode == 0
+
+    class NonExistent(Command):
+        arg0 = 'non-existent'
+
+    result = NonExistent().run()
+    assert result.returncode == 1
+    assert result.stdout == b''

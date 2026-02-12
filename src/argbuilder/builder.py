@@ -1,7 +1,7 @@
 import subprocess
 from .field import Field, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
-from typing import Any, cast
+from typing import Any, Literal, cast, overload
 from operator import add
 from functools import reduce as foldl
 from warnings import deprecated
@@ -211,7 +211,12 @@ class Command(Chainable):
             extra=args
         )
 
-    def run(self, **kwargs: object) -> subprocess.CompletedProcess[str]:
+    @overload
+    def run(self, text: Literal[True], **kwargs: object) -> subprocess.CompletedProcess[str]: ...
+    @overload
+    def run(self, text: Literal[False], **kwargs: object) -> subprocess.CompletedProcess[bytes]: ...
+
+    def run(self, text: bool = False, **kwargs: object):
         """Runs the built command via subprocess.run. Kwargs are passed through."""
         DEFAULT_KWARGS = dict(
             text=False,
@@ -221,8 +226,20 @@ class Command(Chainable):
         )
 
         kwargs = DEFAULT_KWARGS | kwargs
-        return subprocess.run(self.build(), **kwargs)
-    
+
+        args = self.build()
+        try:
+            result = subprocess.run(args, **kwargs)
+        except FileNotFoundError as e:
+            result = subprocess.CompletedProcess(
+                args=args,
+                returncode=1,
+                stdout=b'',
+                stderr=f'Error running command: {e}'.encode(),
+            )
+        
+        return result
+
     def __eq__(self, other: object):
         if not isinstance(other, type(self)):
             return False
