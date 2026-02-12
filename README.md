@@ -1,6 +1,6 @@
-# Argbuilder -- Declarative subprocess interfacs
+# Argbuilder — Declarative subprocess interfaces
 
-Argbuilder is a library that allows to integrate commandline apps into Pythonn via a declarative interface. It serves as a more robust alternative to "subrpocess.run".
+Argbuilder is a library that allows to integrate commandline apps into Python via declarative interfaces. It serves as a more robust alternative to "subrpocess.run".
 
 ### Usage
 
@@ -31,3 +31,4 @@ class OtherCommand(Command):
 print(OtherCommand().build()) # -> ['foo.cmd']
 print(OtherCommand(verbose=False).build()) # -> ['foo.cmd', '--verbose=false']
 ```
+
