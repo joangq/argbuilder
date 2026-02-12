@@ -117,3 +117,27 @@ def test_subcommands():
         == Top.from_dict({'arg': 'a'}).Sub.from_dict({'x': 'b'}).build(with_self=True)
         
     )
+
+def test_arg0():
+    class Foo(Command):
+        def arg0(self) -> str:
+            return 'bar'
+        
+    assert Foo().build(with_self=True) == ['bar']
+
+    class Foo(Command): ...
+
+    assert Foo().build(with_self=True) == ['foo']
+
+    class Foo(Command):
+        arg0 = 'bar'
+    
+    assert Foo().build(with_self=True) == ['bar']
+
+    class Foo(Command):
+        arg0 = 123
+    
+    with pytest.raises(TypeError):
+        Foo().build(with_self=True)
+        
+    

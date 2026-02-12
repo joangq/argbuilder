@@ -98,6 +98,10 @@ class Command(Chainable):
         
         cls.__builder_fields__ = builder_fields
         
+    def arg0(self) -> str:
+        """Returns the string used as first argument when with_self=True. Override to customize."""
+        return get_command_name(type(self))
+
     def fields(self):
         return {
             k:v
@@ -168,7 +172,15 @@ class Command(Chainable):
         
         ret = list[str]()
         if with_self:
-            ret.append(get_command_name(type(self)))
+            arg0 = getattr(type(self), 'arg0')
+            if isinstance(arg0, str):
+                ret.append(arg0)
+            elif callable(arg0):
+                ret.append(arg0(self))
+            else:
+                raise TypeError(
+                    f"'arg0' can be of type either 'str' or '(self) -> str', but got '{type(arg0).__name__}'"
+                )
         
         ret.extend(result)
         ret.extend(extra)
