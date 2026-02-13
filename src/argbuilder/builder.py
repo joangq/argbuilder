@@ -237,6 +237,21 @@ class Command(Chainable):
             extra=args
         )
 
+    def Popen(self, **kwargs: object):
+        DEFAULT_KWARGS = dict(
+            text=False,
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        kwargs = DEFAULT_KWARGS | kwargs
+
+        args = self.build()
+        result = subprocess.Popen(args, **kwargs)
+  
+        return result
+
     @overload
     def run(self, text: Literal[True], **kwargs: object) -> subprocess.CompletedProcess[str]: ...
     @overload
