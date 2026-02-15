@@ -1,3 +1,4 @@
+from typing import Literal
 from argbuilder import Command, Field
 
 class MyCommand(Command):
