@@ -1,13 +1,7 @@
-<<<<<<< HEAD
 import subprocess
 from .field import DEFAULT_SERIALIZER, Field, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
 from typing import Any, Literal, cast, overload
-=======
-from .field import Field, AnyField, NOT_SET, VALUE_TOKEN, FieldSetter
-from .exception import InvalidFieldError
-from typing import Any, cast, dataclass_transform
->>>>>>> f9b78a0 (Add dataclass_transform)
 from operator import add
 from functools import reduce as foldl
 from warnings import deprecated
