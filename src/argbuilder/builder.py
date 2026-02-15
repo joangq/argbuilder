@@ -1,10 +1,11 @@
 import subprocess
 from .field import DEFAULT_SERIALIZER, Field, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
-from typing import Any, Literal, cast, overload
+from typing import Any, Literal, cast, dataclass_transform, overload
 from operator import add
 from functools import reduce as foldl
 from warnings import deprecated
+from .field import FieldSetter
 
 def find_all(
         x: str, 
