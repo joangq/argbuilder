@@ -16,6 +16,9 @@ Or use '_from_dict' to explicitly reference the private API.
 """)
 
 def is_json_serializable(x: object) -> bool:
+    if isinstance(x, Command):
+        return True
+        
     # simple types
     if isinstance(x, (int, float, bool, str)):
         return True
@@ -32,6 +35,18 @@ def is_json_serializable(x: object) -> bool:
         )
     
     return False
+
+def JsonEncoderFactory(
+    options: dict[str, object],
+    base_encoder: type[json.JSONEncoder] = json.JSONEncoder,
+):
+    class JsonEncoder(base_encoder):
+        def default(self, o: object) -> object:
+            if isinstance(o, Command):
+                return o.dump(mode='json', **options)
+            return super().default(o)
+    
+    return JsonEncoder
 
 def find_all(
         x: str, 
@@ -414,15 +429,16 @@ class Command(Chainable):
         serialize_fields: bool = True,
 
         # json.dumps kwargs
-        skipkeys=False, 
-        ensure_ascii=True, 
-        check_circular=True,
-        allow_nan=True, 
-        cls=None, 
-        indent=None, 
-        separators=None,
-        default=None, 
-        sort_keys=False,
+        skipkeys = False, 
+        ensure_ascii = True, 
+        check_circular = True,
+        allow_nan = True, 
+        cls = None, 
+        indent = None, 
+        separators = None,
+        default = None, 
+        sort_keys = False,
+
         **kwargs: object
     ) -> str:
         json_kwarg_keys = (
@@ -443,6 +459,11 @@ class Command(Chainable):
         for k in json_kwarg_keys:
             if k in vars:
                 json_kwargs[k] = vars.pop(k)
+
+        json_kwargs['cls'] = JsonEncoderFactory(dict(
+            include_values=include_values,
+            serialize_fields=serialize_fields,
+        ))
 
         dump = self.dump(
             mode='json', 
