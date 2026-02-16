@@ -121,10 +121,10 @@ class Chainable:
 
 def bool_serializer[T](f: Field[T]):
     def _(value: T) -> list[str]:
-        if isinstance(f.string, str):
-            result = [f.string] if value else []
+        if isinstance(f.parts, str):
+            result = [f.parts] if value else []
         else:
-            result = f.string if value else []
+            result = f.parts if value else []
         return result
     return _
 
@@ -251,13 +251,13 @@ class Command(Chainable):
                 continue
 
             if isinstance(value, str):
-                strings = [field.string] if isinstance(field.string, str) else field.string
+                strings = [field.parts] if isinstance(field.parts, str) else field.parts
                 result.extend((s.format(value=value) for s in strings))
             else:
-                if isinstance(field.string, str):
-                    parts = split_by(field.string, VALUE_TOKEN)
+                if isinstance(field.parts, str):
+                    parts = split_by(field.parts, VALUE_TOKEN)
                 else:
-                    parts = [p for s in field.string for p in split_by(s, VALUE_TOKEN)]
+                    parts = [p for s in field.parts for p in split_by(s, VALUE_TOKEN)]
                 for part in parts:
                     if part == VALUE_TOKEN:
                         result.extend(value)

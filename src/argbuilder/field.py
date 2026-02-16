@@ -1,5 +1,6 @@
 from typing import Any, Callable, Final, Iterable, Literal, cast
 from dataclasses import dataclass, asdict
+from warnings import deprecated
 
 VALUE_TOKEN = "{value}"
 
@@ -28,11 +29,16 @@ DATACLASS_OPTIONS = dict(
 
 @dataclass(**DATACLASS_OPTIONS)
 class Field[T: Any]:
-    string: Iterable[str]
+    parts: Iterable[str]
     cls: None | type[T]
     serializer: Callable[[T], Iterable[str]]
     default: Default[T] = NOT_SET
     annotation: TypeAnnotation[type[T]] = NOT_SET
+
+    @property
+    @deprecated("Field 'string' is deprecated, use 'parts' instead.")
+    def string(self) -> Iterable[str]:
+        return self.parts
 
     def dump(
         self, 
@@ -55,15 +61,15 @@ class Field[T: Any]:
 DEFAULT_SERIALIZER: Final[Callable[[Any], str]] = lambda x: str(x)
 
 def FieldSetter[T: Any](
-    string: Iterable[str] | str, 
+    parts: Iterable[str] | str, 
     serializer: Callable[[T], Iterable[str] | str] = DEFAULT_SERIALIZER,
     default: Default[T] = NOT_SET,
     annotation: TypeAnnotation[type[T]] = NOT_SET,
 ):
-    string = [string] if isinstance(string, str) else string
+    parts = [parts] if isinstance(parts, str) else parts
 
     result = Field[T](
-        string=string,
+        parts=parts,
         annotation=annotation,
         cls=None,
         serializer=serializer,
