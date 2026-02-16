@@ -139,6 +139,13 @@ def path_serializer[T](f: Field[T]):
         return str(pathlib.Path(value).resolve())
     return _
 
+def command_serializer[T](f: Field[T]):
+    def _(value: T):
+        if not isinstance(value, Command) or not issubclass(type(value), Command):
+            raise TypeError(f'Command field {value} must be of type Command, but got {type(value).__name__}')
+        
+        return value.build()
+    return _
 
 SERIALIZERS = {
     bool: bool_serializer,
@@ -152,7 +159,7 @@ class Command(Chainable):
     __builder_fields__: dict[str, AnyField]
 
     arg0: str | Callable[..., str] = lambda self: get_command_name(type(self))
-    
+
     def __init_subclass__(cls):
         annotations = cls.__annotations__
         
@@ -512,6 +519,8 @@ class Bound:
     @FROM_DICT_DEPRECATION
     def from_dict(self, data: dict[str, object]):
         return self._from_dict(data)
-    
+
+SERIALIZERS[Command] = command_serializer
+
 @deprecated("Deprecated, use 'Command' instead.")
 class Builder(Command): ...
