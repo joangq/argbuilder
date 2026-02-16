@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import json
 import subprocess
 from .field import DEFAULT_SERIALIZER, Field, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
-from typing import Any, Literal, cast, dataclass_transform, overload
+from typing import Any, Callable, Literal, Self, cast, dataclass_transform, overload
 from operator import add
 from functools import reduce as foldl
 from warnings import deprecated
@@ -37,7 +39,7 @@ def is_json_serializable(x: object) -> bool:
     return False
 
 def JsonEncoderFactory(
-    options: dict[str, object],
+    options: dict[str, Any],
     base_encoder: type[json.JSONEncoder] = json.JSONEncoder,
 ):
     class JsonEncoder(base_encoder):
@@ -100,19 +102,20 @@ def get_command_name(x: object|type) -> str:
         return result.lower()
 
 class Chainable:
+    _parent: 'Chainable | None'
+
     def __init__(self, **kwargs: object):
         self._parent = None
         self._data = kwargs
-    
+
     def __getattribute__(self, name: str) -> 'Bound|Any':
         try:
             attr = super().__getattribute__(name)
         except AttributeError:
             raise
-        
-        if (isinstance(attr, type) and 
-            issubclass(attr, Chainable)):
-            return Bound(attr, self)
+
+        if isinstance(attr, type) and issubclass(attr, Chainable):
+            return Bound(cast(type[Command], attr), self)
         
         return cast(Any, attr)
 
@@ -122,17 +125,17 @@ class Chainable:
 def bool_serializer[T](f: Field[T]):
     def _(value: T) -> list[str]:
         if isinstance(f.parts, str):
-            result = [f.parts] if value else []
+            result: list[str] = [f.parts] if value else []
         else:
-            result = f.parts if value else []
+            result = list(f.parts) if value else []
         return result
     return _
 
 import pathlib
 def path_serializer[T](f: Field[T]):
-    def _(value: T) -> list[str]:
+    def _(value: T):  # Returns str for format substitution; Iterable[str] for type
         if not isinstance(value, pathlib.Path):
-            raise TypeError(f'Path field {f.string} must be of type {pathlib.Path}, but got {type(value).__name__}')
+            raise TypeError(f'Path field {value} must be of type {pathlib.Path}, but got {type(value).__name__}')
         return str(pathlib.Path(value).resolve())
     return _
 
@@ -147,6 +150,9 @@ SERIALIZERS = {
 @dataclass_transform(field_specifiers=(FieldSetter, Field,))
 class Command(Chainable):
     __builder_fields__: dict[str, AnyField]
+
+    arg0: str | Callable[..., str] = lambda self: get_command_name(type(self))
+    
     def __init_subclass__(cls):
         annotations = cls.__annotations__
         
@@ -175,10 +181,6 @@ class Command(Chainable):
             builder_fields[k] = v
         
         cls.__builder_fields__ = builder_fields
-        
-    def arg0(self) -> str:
-        """Returns the string used as first argument when with_self=True. Override to customize."""
-        return get_command_name(type(self))
 
     def fields(self):
         return {
@@ -224,7 +226,7 @@ class Command(Chainable):
             )
         
         assert result is not None
-        return result
+        return cast(str, result)
 
     @classmethod
     def _from_dict(cls, data: dict[str, object]):
@@ -298,17 +300,17 @@ class Command(Chainable):
         )
 
     def Popen(self, **kwargs: object):
-        DEFAULT_KWARGS = dict(
+        DEFAULT_KWARGS = dict[str, Any](
             text=False,
             shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
 
-        kwargs = DEFAULT_KWARGS | kwargs
+        kwargs = DEFAULT_KWARGS | cast(dict[str, Any], kwargs)
 
         args = self.build()
-        result = subprocess.Popen(args, **kwargs)
+        result = subprocess.Popen(args, **cast(Any, kwargs))
   
         return result
 
@@ -322,23 +324,22 @@ class Command(Chainable):
 
         executing_str.append(self._get_arg0())
 
-        for k,v in self.fields().items():
+        for k, v in self.fields().items():
             t = self.class_fields()[k].annotation
-            x = repr(v)
+            x: str = repr(v)
 
-            if pretty and (t is str or issubclass(t, str)):
+            if pretty and (t is str or (isinstance(t, type) and issubclass(t, str))):
                 executing_str.append(f'{Color.GREEN}{x}{Color.RESET}')
             else:
                 executing_str.append(x)
-        
-        executing_str = ' '.join(executing_str)
 
-        return executing_str
+        return ' '.join(executing_str)
 
     @overload
     def run(
-        self, 
-        text: Literal[True], 
+        self,
+        *,
+        text: Literal[True],
         verbose: bool = False,
         pretty: bool = False,
         **kwargs: object
@@ -346,29 +347,31 @@ class Command(Chainable):
 
     @overload
     def run(
-        self, 
-        text: Literal[False], 
+        self,
+        *,
+        text: Literal[False] = False,
         verbose: bool = False,
         pretty: bool = False,
         **kwargs: object
     ) -> subprocess.CompletedProcess[bytes]: ...
 
     def run(
-        self, 
-        text: bool = False, 
+        self,
+        text: bool = False,
         verbose: bool = False,
         pretty: bool = False,
         **kwargs: object
     ):
         """Runs the built command via subprocess.run. Kwargs are passed through."""
-        DEFAULT_KWARGS = dict(
+        DEFAULT_KWARGS: dict[str, Any] = dict(
             text=False,
             shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
 
-        kwargs = DEFAULT_KWARGS | kwargs
+        kwargs = DEFAULT_KWARGS | cast(dict[str, Any], kwargs)
+        subprocess_kwargs = {k: v for k, v in kwargs.items() if k not in ('verbose', 'pretty')}
 
         args = self.build()
 
@@ -376,7 +379,7 @@ class Command(Chainable):
             print(self._display(pretty))
 
         try:
-            result = subprocess.run(args, **kwargs)
+            result = subprocess.run(args, **cast(Any, subprocess_kwargs))
         except FileNotFoundError as e:
             result = subprocess.CompletedProcess(
                 args=args,
@@ -415,7 +418,8 @@ class Command(Chainable):
                 field_dump['values'] = values
 
             if serialize_fields:
-                field_dump.setdefault('values', {})['serialized'] = v.serializer(self.fields()[k])
+                field_dump.setdefault('values', {})['serialized'] = \
+                    v.serializer(self.fields()[k])
             fields.append({'name': k, **field_dump})
 
         return {
@@ -424,53 +428,56 @@ class Command(Chainable):
         }
 
     def dump_json(
-        self, 
+        self,
         include_values: bool = True,
         serialize_fields: bool = True,
 
         # json.dumps kwargs
-        skipkeys = False, 
-        ensure_ascii = True, 
-        check_circular = True,
-        allow_nan = True, 
-        cls = None, 
-        indent = None, 
-        separators = None,
-        default = None, 
-        sort_keys = False,
+        skipkeys: bool = False,
+        ensure_ascii: bool = True,
+        check_circular: bool = True,
+        allow_nan: bool = True,
+        cls: type[json.JSONEncoder] | None = None,
+        indent: int | str | None = None,
+        separators: tuple[str, str] | None = None,
+        default: Callable[[Any], Any] | None = None,
+        sort_keys: bool = False,
 
-        **kwargs: object
+        **kwargs: Any
     ) -> str:
         json_kwarg_keys = (
-            'skipkeys', 
-            'ensure_ascii', 
-            'check_circular', 
-            'allow_nan', 
-            'cls', 
-            'indent', 
-            'separators', 
-            'default', 
+            'skipkeys',
+            'ensure_ascii',
+            'check_circular',
+            'allow_nan',
+            'cls',
+            'indent',
+            'separators',
+            'default',
             'sort_keys'
         )
 
-        vars = locals()
+        vars_ = locals()
 
-        json_kwargs = dict[str, object]()
+        json_kwargs: dict[str, Any] = {}
         for k in json_kwarg_keys:
-            if k in vars:
-                json_kwargs[k] = vars.pop(k)
+            if k in vars_:
+                json_kwargs[k] = vars_.pop(k)
 
-        json_kwargs['cls'] = JsonEncoderFactory(dict(
-            include_values=include_values,
-            serialize_fields=serialize_fields,
-        ))
+        json_kwargs['cls'] = cast(
+            type[json.JSONEncoder],
+            JsonEncoderFactory(dict(
+                include_values=include_values,
+                serialize_fields=serialize_fields,
+            )),
+        )
 
         dump = self.dump(
-            mode='json', 
-            include_values=include_values, 
+            mode='json',
+            include_values=include_values,
             serialize_fields=serialize_fields
         )
-        
+
         return json.dumps(dump, **(json_kwargs | kwargs))
     
     @classmethod
@@ -488,7 +495,7 @@ class Command(Chainable):
         return cls._from_dict(params)
 
 class Bound:
-    def __init__(self, cls: type[Command], parent: object):
+    def __init__(self, cls: type[Command], parent: Chainable):
         self.cls = cls
         self.parent = parent
 
@@ -496,8 +503,7 @@ class Bound:
         child = self.cls(**kwargs)
         child._parent = self.parent
         return child
-    
-    
+
     def _from_dict(self, data: dict[str, object]):
         child = self.cls._from_dict(data)
         child._parent = self.parent

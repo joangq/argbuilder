@@ -11,8 +11,8 @@ class NotSet(object):
 NOT_SET = NotSet()
 
 type Maybe[T] = T|NotSet
-type TypeAnnotation[T] = Maybe[T]
-type Default[T] = Maybe[T]
+# type TypeAnnotation[T] = Maybe[T]
+# type Default[T] = Maybe[T]
 
 DATACLASS_OPTIONS = dict(
     init         = True,
@@ -29,11 +29,15 @@ DATACLASS_OPTIONS = dict(
 
 @dataclass(**DATACLASS_OPTIONS)
 class Field[T: Any]:
+    type TypeAnnotation = Maybe[type[T]]
+    type Default = Maybe[T]
+    type SerializerType = Callable[[T], Iterable[str]]
+
     parts: Iterable[str]
     cls: None | type[T]
-    serializer: Callable[[T], Iterable[str]]
-    default: Default[T] = NOT_SET
-    annotation: TypeAnnotation[type[T]] = NOT_SET
+    serializer: SerializerType
+    default: Default = NOT_SET
+    annotation: TypeAnnotation = NOT_SET
 
     @property
     @deprecated("Field 'string' is deprecated, use 'parts' instead.")
@@ -62,9 +66,9 @@ DEFAULT_SERIALIZER: Final[Callable[[Any], str]] = lambda x: str(x)
 
 def FieldSetter[T: Any](
     parts: Iterable[str] | str, 
-    serializer: Callable[[T], Iterable[str] | str] = DEFAULT_SERIALIZER,
-    default: Default[T] = NOT_SET,
-    annotation: TypeAnnotation[type[T]] = NOT_SET,
+    serializer: Field[T].SerializerType = DEFAULT_SERIALIZER,
+    default: Field[T].Default = NOT_SET,
+    annotation: Field[T].TypeAnnotation = NOT_SET,
 ):
     parts = [parts] if isinstance(parts, str) else parts
 
