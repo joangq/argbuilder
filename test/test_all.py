@@ -43,7 +43,7 @@ def test_build():
 
 
     command = Foo(**args)
-    command_from_dict = Foo.from_dict(args)
+    command_from_dict = Foo._from_dict(args)
 
     assert command == command_from_dict
     
@@ -112,9 +112,9 @@ def test_subcommands():
     assert (
         expected
         == Top(arg='a').Sub(x='b').build(with_self=True)
-        == Top(arg='a').Sub.from_dict({'x': 'b'}).build(with_self=True)
-        == Top.from_dict({'arg': 'a'}).Sub(x='b').build(with_self=True)
-        == Top.from_dict({'arg': 'a'}).Sub.from_dict({'x': 'b'}).build(with_self=True)
+        == Top(arg='a').Sub._from_dict({'x': 'b'}).build(with_self=True)
+        == Top._from_dict({'arg': 'a'}).Sub(x='b').build(with_self=True)
+        == Top._from_dict({'arg': 'a'}).Sub._from_dict({'x': 'b'}).build(with_self=True)
         
     )
 
@@ -177,3 +177,13 @@ def test_default_serializers():
 
     command = Foo(path=foopath, verbose=False)
     assert command.build(with_self=False) == [f'--path={full_foopath}']
+
+def test_dump_load():
+    class Foo(Command):
+        x: int = Field('{value}')
+        y: str = Field('--y={value}')
+    
+    foo = Foo(x=1, y='hello')
+
+    # roundtrip
+    assert foo == Foo.loads(foo.dump_json())

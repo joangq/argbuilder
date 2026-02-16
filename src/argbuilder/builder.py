@@ -1,3 +1,4 @@
+import json
 import subprocess
 from .field import DEFAULT_SERIALIZER, Field, AnyField, NOT_SET, VALUE_TOKEN
 from .exception import InvalidFieldError
@@ -6,6 +7,31 @@ from operator import add
 from functools import reduce as foldl
 from warnings import deprecated
 from .field import FieldSetter
+from ._color import Color
+
+FROM_DICT_DEPRECATION = deprecated("""\
+This method is deprecated from the public API.
+Use load/loads to load from a dump.
+Or use '_from_dict' to explicitly reference the private API.
+""")
+
+def is_json_serializable(x: object) -> bool:
+    # simple types
+    if isinstance(x, (int, float, bool, str)):
+        return True
+    
+    # list/tuple
+    if isinstance(x, (list, tuple)):
+        return all(is_json_serializable(y) for y in x)
+    
+    # dict
+    if isinstance(x, dict):
+        return all(
+            is_json_serializable(k) and is_json_serializable(v) 
+            for k,v in x.items()
+        )
+    
+    return False
 
 def find_all(
         x: str, 
@@ -168,9 +194,25 @@ class Command(Chainable):
         cls = type(self)
         fields = ', '.join(f'{k}={v}' for k,v in self.fields().items())
         return f'{cls.__name__}({fields})'
-    
+
+    def _get_arg0(self) -> str:
+        arg0 = getattr(type(self), 'arg0')
+
+        result = None
+        if isinstance(arg0, str):
+            result = arg0
+        elif callable(arg0):
+            result = arg0(self)
+        else:
+            raise TypeError(
+                f"'arg0' can be of type either 'str' or '(self) -> str', but got '{type(arg0).__name__}'"
+            )
+        
+        assert result is not None
+        return result
+
     @classmethod
-    def from_dict(cls, data: dict[str, object]):
+    def _from_dict(cls, data: dict[str, object]):
         params = {
             k:v
             for k,v in data.items()
@@ -178,6 +220,11 @@ class Command(Chainable):
         }
         
         return cls(**params)
+    
+    @classmethod
+    @FROM_DICT_DEPRECATION
+    def from_dict(cls, data: dict[str, object]):
+        return cls._from_dict(data)
     
     def _build_fields(self, with_self: bool, extra: dict[str, str]):
         result = list[str]()
@@ -192,7 +239,10 @@ class Command(Chainable):
                 strings = [field.string] if isinstance(field.string, str) else field.string
                 result.extend((s.format(value=value) for s in strings))
             else:
-                parts = split_by(field.string, VALUE_TOKEN) if isinstance(field.string, str) else field.string
+                if isinstance(field.string, str):
+                    parts = split_by(field.string, VALUE_TOKEN)
+                else:
+                    parts = [p for s in field.string for p in split_by(s, VALUE_TOKEN)]
                 for part in parts:
                     if part == VALUE_TOKEN:
                         result.extend(value)
@@ -200,17 +250,10 @@ class Command(Chainable):
                         result.append(part.strip())
         
         ret = list[str]()
+
         if with_self:
-            arg0 = getattr(type(self), 'arg0')
-            if isinstance(arg0, str):
-                ret.append(arg0)
-            elif callable(arg0):
-                ret.append(arg0(self))
-            else:
-                raise TypeError(
-                    f"'arg0' can be of type either 'str' or '(self) -> str', but got '{type(arg0).__name__}'"
-                )
-        
+            ret.append(self._get_arg0())
+
         ret.extend(result)
         ret.extend(extra)
         #ret = [*result, *args]
@@ -254,12 +297,54 @@ class Command(Chainable):
   
         return result
 
-    @overload
-    def run(self, text: Literal[True], **kwargs: object) -> subprocess.CompletedProcess[str]: ...
-    @overload
-    def run(self, text: Literal[False], **kwargs: object) -> subprocess.CompletedProcess[bytes]: ...
+    def _display(self, pretty: bool) -> str:
+        executing_str = list[str]()
 
-    def run(self, text: bool = False, **kwargs: object):
+        if pretty:
+            executing_str.append(f'{Color.CYAN}>>>{Color.RESET}')
+        else:
+            executing_str.append('>>> ')
+
+        executing_str.append(self._get_arg0())
+
+        for k,v in self.fields().items():
+            t = self.class_fields()[k].annotation
+            x = repr(v)
+
+            if pretty and (t is str or issubclass(t, str)):
+                executing_str.append(f'{Color.GREEN}{x}{Color.RESET}')
+            else:
+                executing_str.append(x)
+        
+        executing_str = ' '.join(executing_str)
+
+        return executing_str
+
+    @overload
+    def run(
+        self, 
+        text: Literal[True], 
+        verbose: bool = False,
+        pretty: bool = False,
+        **kwargs: object
+    ) -> subprocess.CompletedProcess[str]: ...
+
+    @overload
+    def run(
+        self, 
+        text: Literal[False], 
+        verbose: bool = False,
+        pretty: bool = False,
+        **kwargs: object
+    ) -> subprocess.CompletedProcess[bytes]: ...
+
+    def run(
+        self, 
+        text: bool = False, 
+        verbose: bool = False,
+        pretty: bool = False,
+        **kwargs: object
+    ):
         """Runs the built command via subprocess.run. Kwargs are passed through."""
         DEFAULT_KWARGS = dict(
             text=False,
@@ -271,6 +356,10 @@ class Command(Chainable):
         kwargs = DEFAULT_KWARGS | kwargs
 
         args = self.build()
+
+        if verbose:
+            print(self._display(pretty))
+
         try:
             result = subprocess.run(args, **kwargs)
         except FileNotFoundError as e:
@@ -292,6 +381,91 @@ class Command(Chainable):
             and self.class_fields() == other.class_fields()
         )
 
+    def dump(
+        self, 
+        mode: Literal['json', 'python'] = 'python',
+        include_values: bool = True,
+        serialize_fields: bool = True,
+    ) -> dict:
+        fields = []
+        for k,v in self.class_fields().items():
+            field_dump = v.dump(mode=mode)
+
+            if include_values:
+                values = {}
+                val = self.fields()[k]
+                if mode == 'json' and is_json_serializable(val):
+                    values['runtime'] = val
+                
+                field_dump['values'] = values
+
+            if serialize_fields:
+                field_dump.setdefault('values', {})['serialized'] = v.serializer(self.fields()[k])
+            fields.append({'name': k, **field_dump})
+
+        return {
+            'name': self._get_arg0(),
+            'fields': fields
+        }
+
+    def dump_json(
+        self, 
+        include_values: bool = True,
+        serialize_fields: bool = True,
+
+        # json.dumps kwargs
+        skipkeys=False, 
+        ensure_ascii=True, 
+        check_circular=True,
+        allow_nan=True, 
+        cls=None, 
+        indent=None, 
+        separators=None,
+        default=None, 
+        sort_keys=False,
+        **kwargs: object
+    ) -> str:
+        json_kwarg_keys = (
+            'skipkeys', 
+            'ensure_ascii', 
+            'check_circular', 
+            'allow_nan', 
+            'cls', 
+            'indent', 
+            'separators', 
+            'default', 
+            'sort_keys'
+        )
+
+        vars = locals()
+
+        json_kwargs = dict[str, object]()
+        for k in json_kwarg_keys:
+            if k in vars:
+                json_kwargs[k] = vars.pop(k)
+
+        dump = self.dump(
+            mode='json', 
+            include_values=include_values, 
+            serialize_fields=serialize_fields
+        )
+        
+        return json.dumps(dump, **(json_kwargs | kwargs))
+    
+    @classmethod
+    def loads(cls, data: str) -> 'Command':
+        return cls.load(json.loads(data))
+    
+    @classmethod
+    def load(cls, data: dict) -> 'Command':
+        params = {
+            f['name']: f['values']['runtime']
+            for f in data.get('fields', [])
+            if f.get('name') in cls.class_fields()
+            and 'runtime' in f.get('values', {})
+        }
+        return cls._from_dict(params)
+
 class Bound:
     def __init__(self, cls: type[Command], parent: object):
         self.cls = cls
@@ -303,10 +477,14 @@ class Bound:
         return child
     
     
-    def from_dict(self, data: dict[str, object]):
-        child = self.cls.from_dict(data)
+    def _from_dict(self, data: dict[str, object]):
+        child = self.cls._from_dict(data)
         child._parent = self.parent
         return child
+
+    @FROM_DICT_DEPRECATION
+    def from_dict(self, data: dict[str, object]):
+        return self._from_dict(data)
     
 @deprecated("Deprecated, use 'Command' instead.")
 class Builder(Command): ...
