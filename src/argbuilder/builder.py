@@ -345,6 +345,8 @@ class Command(Chainable):
                     parents[0] = first_parent_path.name
             except Exception:
                 pass
+        
+        executing_str.extend([str(p) for p in parents])
 
 
         executing_str.append(self._get_arg0())
