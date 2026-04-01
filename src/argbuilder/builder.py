@@ -340,7 +340,8 @@ class Command(Chainable):
             t = self.class_fields()[k].annotation
             x: str = repr(v)
 
-            executing_str.append(f'{k!s}=')
+            executing_str.append(str(k))
+            executing_str.append('=')
 
             if pretty and (t is str or (isinstance(t, type) and issubclass(t, str))):
                 executing_str.append(f'{Color.GREEN}{x!r}{Color.RESET}')
