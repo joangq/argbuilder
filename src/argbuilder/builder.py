@@ -10,6 +10,7 @@ from functools import reduce as foldl
 from warnings import deprecated
 from .field import FieldSetter
 from ._color import Color
+from pathlib import Path
 
 FROM_DICT_DEPRECATION = deprecated("""\
 This method is deprecated from the public API.
@@ -131,12 +132,11 @@ def bool_serializer[T](f: Field[T]):
         return result
     return _
 
-import pathlib
 def path_serializer[T](f: Field[T]):
     def _(value: T):  # Returns str for format substitution; Iterable[str] for type
-        if not isinstance(value, pathlib.Path):
-            raise TypeError(f'Path field {value} must be of type {pathlib.Path}, but got {type(value).__name__}')
-        return str(pathlib.Path(value).resolve())
+        if not isinstance(value, Path):
+            raise TypeError(f'Path field {value} must be of type {Path}, but got {type(value).__name__}')
+        return str(Path(value).resolve())
     return _
 
 def command_serializer[T](f: Field[T]):
@@ -149,7 +149,7 @@ def command_serializer[T](f: Field[T]):
 
 SERIALIZERS = {
     bool: bool_serializer,
-    pathlib.Path: path_serializer,
+    Path: path_serializer,
 }
 
 # ==============================================================================
@@ -321,7 +321,7 @@ class Command(Chainable):
   
         return result
 
-    def _display(self, pretty: bool) -> str:
+    def _display(self, pretty: bool, short: bool = True) -> str:
         executing_str = list[str]()
 
         if pretty:
@@ -329,10 +329,23 @@ class Command(Chainable):
         else:
             executing_str.append('>>> ')
 
+        parents = []
         current = self
         while (parent := current._parent) is not None:
-            executing_str.append(f'{parent._get_arg0()} ')
+            parents.append(parent._get_arg0())
             current = parent
+
+        parents.reverse()
+        
+        if short:
+            first_parent = parents[0]
+            try:
+                first_parent_path = Path(first_parent)
+                if first_parent_path.exists():
+                    parents[0] = first_parent_path.name
+            except Exception:
+                pass
+
 
         executing_str.append(self._get_arg0())
 
