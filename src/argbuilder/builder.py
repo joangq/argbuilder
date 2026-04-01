@@ -329,6 +329,10 @@ class Command(Chainable):
         else:
             executing_str.append('>>> ')
 
+        while (parent := self._parent) is not None:
+            executing_str.append(f'{parent._get_arg0()} ')
+            self = parent
+
         executing_str.append(self._get_arg0())
 
         for k, v in self.fields().items():
