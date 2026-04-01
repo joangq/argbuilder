@@ -343,9 +343,9 @@ class Command(Chainable):
             kv_str = f'{k!s}='
 
             if pretty and (t is str or (isinstance(t, type) and issubclass(t, str))):
-                kv_str.append(f'{Color.GREEN}{x!r}{Color.RESET}')
+                kv_str += f'{Color.GREEN}{x!r}{Color.RESET}'
             else:
-                kv_str.append(repr(x))
+                kv_str += repr(x)
             
             executing_str.append(kv_str)
 
