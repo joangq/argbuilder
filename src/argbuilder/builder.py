@@ -18,25 +18,27 @@ Use load/loads to load from a dump.
 Or use '_from_dict' to explicitly reference the private API.
 """)
 
+DISPLAY_DEPRECATION = deprecated("_display is no longer supported and will be removed in a future version.")
+
 def is_json_serializable(x: object) -> bool:
     if isinstance(x, Command):
         return True
-        
+
     # simple types
     if isinstance(x, (int, float, bool, str)):
         return True
-    
+
     # list/tuple
     if isinstance(x, (list, tuple)):
         return all(is_json_serializable(y) for y in x)
-    
+
     # dict
     if isinstance(x, dict):
         return all(
-            is_json_serializable(k) and is_json_serializable(v) 
+            is_json_serializable(k) and is_json_serializable(v)
             for k,v in x.items()
         )
-    
+
     return False
 
 def JsonEncoderFactory(
@@ -48,13 +50,13 @@ def JsonEncoderFactory(
             if isinstance(o, Command):
                 return o.dump(mode='json', **options)
             return super().default(o)
-    
+
     return JsonEncoder
 
 def find_all(
-        x: str, 
-        sub: str, 
-        start: int = 0, 
+        x: str,
+        sub: str,
+        start: int = 0,
         indices: list[int] | None = None
 ) -> list[int]:
     if indices is None:
@@ -99,7 +101,7 @@ def get_command_name(x: object|type) -> str:
             result = name
         else:
             result = name.rsplit('_', 1)[1]
-        
+
         return result.lower()
 
 class Chainable:
@@ -117,7 +119,7 @@ class Chainable:
 
         if isinstance(attr, type) and issubclass(attr, Chainable):
             return Bound(cast(type[Command], attr), self)
-        
+
         return cast(Any, attr)
 
 # ==============================================================================
@@ -143,7 +145,7 @@ def command_serializer[T](f: Field[T]):
     def _(value: T):
         if not isinstance(value, Command) or not issubclass(type(value), Command):
             raise TypeError(f'Command field {value} must be of type Command, but got {type(value).__name__}')
-        
+
         return value.build()
     return _
 
@@ -162,12 +164,12 @@ class Command(Chainable):
 
     def __init_subclass__(cls):
         annotations = cls.__annotations__
-        
+
         builder_fields = dict[str, AnyField]()
         for k,v in cls.__dict__.items():
             if not isinstance(v, Field):
                 continue
-            
+
             v = cast(AnyField, v)
 
             if v.annotation is not NOT_SET:
@@ -176,17 +178,17 @@ class Command(Chainable):
 
             if k not in annotations:
                 raise InvalidFieldError(f'Field {k} is Field but has no type annotation.')
-            
+
             t = annotations[k]
             if (v.serializer is DEFAULT_SERIALIZER):
                 predefined_serializer = SERIALIZERS.get(t, None)
                 if predefined_serializer is not None:
                     v.serializer = predefined_serializer(v)
-            
+
             v.cls = cls
             v.annotation = annotations[k]
             builder_fields[k] = v
-        
+
         cls.__builder_fields__ = builder_fields
 
     def fields(self):
@@ -195,7 +197,7 @@ class Command(Chainable):
             for k,v in self.__dict__.items()
             if k in self.class_fields()
         }
-    
+
     @classmethod
     def class_fields(cls):
         return cls.__builder_fields__
@@ -231,7 +233,7 @@ class Command(Chainable):
             raise TypeError(
                 f"'arg0' can be of type either 'str' or '(self) -> str', but got '{type(arg0).__name__}'"
             )
-        
+
         assert result is not None
         return cast(str, result)
 
@@ -242,14 +244,14 @@ class Command(Chainable):
             for k,v in data.items()
             if k in cls.__builder_fields__
         }
-        
+
         return cls(**params)
-    
+
     @classmethod
     @FROM_DICT_DEPRECATION
     def from_dict(cls, data: dict[str, object]):
         return cls._from_dict(data)
-    
+
     def _build_fields(self, with_self: bool, extra: dict[str, str]):
         result = list[str]()
         for k,v in self.fields().items():
@@ -272,7 +274,7 @@ class Command(Chainable):
                         result.extend(value)
                     else:
                         result.append(part.strip())
-        
+
         ret = list[str]()
 
         if with_self:
@@ -282,7 +284,7 @@ class Command(Chainable):
         ret.extend(extra)
         #ret = [*result, *args]
         return ret
-        
+
     def build(self, with_self: bool = True, **args: str):
         has_parent = (
             hasattr(self, '_parent')
@@ -298,9 +300,9 @@ class Command(Chainable):
                     extra={},
                 ))
                 node = node._parent
-            
+
             return foldl(add, reversed(parts))
-        
+
         return self._build_fields(
             with_self=with_self,
             extra=args
@@ -318,53 +320,12 @@ class Command(Chainable):
 
         args = self.build()
         result = subprocess.Popen(args, **cast(Any, kwargs))
-  
+
         return result
 
+    @DISPLAY_DEPRECATION
     def _display(self, pretty: bool, short: bool = True) -> str:
-        executing_str = list[str]()
-
-        if pretty:
-            executing_str.append(f'{Color.CYAN}>>>{Color.RESET}')
-        else:
-            executing_str.append('>>> ')
-
-        parents = []
-        current = self
-        while (parent := current._parent) is not None:
-            parents.append(parent._get_arg0())
-            current = parent
-
-        parents.reverse()
-        
-        if short:
-            first_parent = parents[0]
-            try:
-                first_parent_path = Path(first_parent)
-                if first_parent_path.exists():
-                    parents[0] = first_parent_path.name
-            except Exception:
-                pass
-        
-        executing_str.extend([str(p) for p in parents])
-
-
-        executing_str.append(self._get_arg0())
-
-        for k, v in self.fields().items():
-            t = self.class_fields()[k].annotation
-            x: str = repr(v)
-
-            kv_str = f'{k!s}='
-
-            if pretty and (t is str or (isinstance(t, type) and issubclass(t, str))):
-                kv_str += f'{Color.GREEN}{x!r}{Color.RESET}'
-            else:
-                kv_str += repr(x)
-            
-            executing_str.append(kv_str)
-
-        return ' '.join(executing_str)
+        ...
 
     @overload
     def run(
@@ -372,7 +333,6 @@ class Command(Chainable):
         *,
         text: Literal[True],
         verbose: bool = False,
-        pretty: bool = False,
         **kwargs: object
     ) -> subprocess.CompletedProcess[str]: ...
 
@@ -382,7 +342,6 @@ class Command(Chainable):
         *,
         text: Literal[False] = False,
         verbose: bool = False,
-        pretty: bool = False,
         **kwargs: object
     ) -> subprocess.CompletedProcess[bytes]: ...
 
@@ -390,7 +349,6 @@ class Command(Chainable):
         self,
         text: bool = False,
         verbose: bool = False,
-        pretty: bool = False,
         **kwargs: object
     ):
         """Runs the built command via subprocess.run. Kwargs are passed through."""
@@ -406,9 +364,6 @@ class Command(Chainable):
 
         args = self.build()
 
-        if verbose:
-            print(self._display(pretty))
-
         try:
             result = subprocess.run(args, **cast(Any, subprocess_kwargs))
         except FileNotFoundError as e:
@@ -418,20 +373,20 @@ class Command(Chainable):
                 stdout=b'',
                 stderr=f'Error running command: {e}'.encode(),
             )
-        
+
         return result
 
     def __eq__(self, other: object):
         if not isinstance(other, type(self)):
             return False
-        
+
         return (
             self.fields() == other.fields()
             and self.class_fields() == other.class_fields()
         )
 
     def dump(
-        self, 
+        self,
         mode: Literal['json', 'python'] = 'python',
         include_values: bool = True,
         serialize_fields: bool = True,
@@ -445,7 +400,7 @@ class Command(Chainable):
                 val = self.fields()[k]
                 if mode == 'json' and is_json_serializable(val):
                     values['runtime'] = val
-                
+
                 field_dump['values'] = values
 
             if serialize_fields:
@@ -510,11 +465,11 @@ class Command(Chainable):
         )
 
         return json.dumps(dump, **(json_kwargs | kwargs))
-    
+
     @classmethod
     def loads(cls, data: str) -> 'Command':
         return cls.load(json.loads(data))
-    
+
     @classmethod
     def load(cls, data: dict) -> 'Command':
         params = {
